@@ -45,7 +45,7 @@ library(shinyCheckboxTree)
 library(shinyFeedback)
 library(rintrojs)
 #library(rlist)
-library(InterMineR) 
+#library(InterMineR) #this line is giving an error, meanwhile I solve the problem you can load the functions saved in workspace_app.RData opening this file. 
 
 #Load functions----
 #load("workspace_app.RData")
