@@ -45,7 +45,7 @@ library(shinyCheckboxTree)
 library(shinyFeedback)
 library(rintrojs)
 #library(rlist)
-#library(InterMineR) #ideally use it when all the functions are updated
+library(InterMineR) 
 
 #Load functions----
 #load("workspace_app.RData")
