@@ -36,6 +36,7 @@ install.packages("shinyBS")
 #Github packages ----
 devtools::install_github('cytoscape/cyjShiny')
 devtools::install_github('mrjoh3/cytoscape')
+devtools::install_github('stla/shinyCheckboxTree')
 detach("package:InterMineR", unload = TRUE)
 devtools::install_github('intermine/InterMineR')
 
