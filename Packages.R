@@ -34,6 +34,7 @@ install.packages("webshot")
 install.packages("shinyFeedback")
 install.packages("rintrojs")
 install.packages('remotes')
+install.packages("rmarkdown")
 
 #Gitlab packages ----
 remotes::install_gitlab('CarlBrunius/MUVR')
