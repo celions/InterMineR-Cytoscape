@@ -7,4 +7,5 @@ To run the Shiny app, first make sure that you have installed:
 3.  All of the packages from thePackages.Rfile in R Studio. In order toinstall them correctly, run line by line the R file.
 
 Download all the files and the "www" folder. 
-Open R Studio, open the file app.R and open the file workspace_app.RData. Then, press "Run App". 
+Open R Studio, open the file app.R and open the file workspace_app.RData. Then, press "Run App".
+It is recommended to create a R Project using the directory of the unzip folder and then open the mentioned files. 
