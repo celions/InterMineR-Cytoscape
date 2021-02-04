@@ -5,6 +5,7 @@
 
 #Libraries----
 library(shiny)
+library(shinyWidgets)
 library(plotly)
 library(zip)
 library(filesstrings)
@@ -419,6 +420,17 @@ ui <- dashboardPage(
                          selectInput("selectName_3_attr","Value", choices = c(), multiple = TRUE),
                          br(),
                          hr(),
+                         tags$h4("Continuous Mapping"),
+                         selectInput("gradient_id","Choose a node attribute:",selected = NULL, choices = c()),
+                         bsTooltip("gradient_id", "Select a property and obtain a linear mapping of it to colours or sizes (colour and size gradient)."),
+                         radioButtons("mapping_question", "Do you want to applay a gradient?",
+                                      c("Yes, a colour gradient.",
+                                        "Yes, a size gradient.",
+                                        "No"),
+                                      selected = "No"),
+                         uiOutput("ui"),
+                         br(),
+                         hr(),
                          div(style="display:inline-block",
                              actionButton("button_set", "Customize the network!", style="color: #fff; background-color: #ff9900; border-color: #ff9900"),
                              actionButton("help5","", icon = icon("question"), style="color: #000; background-color: #bdff80; border-color: #bdff80"),
@@ -451,17 +463,9 @@ ui <- dashboardPage(
                                            'cose',
                                            'cola'))),
                          bsTooltip("layoutcytoscape", "Layout the current graph using the specified strategy."),
-                         cytoscapeOutput("network", height = "600px"),
+                         cytoscapeOutput("network", height = "900px"),
                          br(),
                          br(),
-                         #with the following lines, it is aimed to include the option to visualize data along a color gradient
-                         #this is a capability of the cytoscape program however using the packages developed for R it has not been possible
-                         #future work
-                         conditionalPanel("isFinite(input.selectName_3_attr)",
-                                          #http://bioconductor.riken.jp/packages/3.9/bioc/vignettes/RCyjs/inst/doc/RCyjs.html
-                                          #https://js.cytoscape.org/#style/mappers
-                                          actionButton("gradient_color","Apply a Gradient Color"),#mapData(weight, 0, 100, blue, red)
-                                          actionButton("gradient_size", "Apply a Gradient Size")), 
                          br(),
                          br(),
                          br(),
@@ -1857,7 +1861,6 @@ server <- function(input, output, session){
                                                        if(!(is.null(input$b_select_5))){
                                                          #same steps, see previous if's
                                                          try({
-                                                           print(input$b_select_5)
                                                            for (element in input$b_select_5){
                                                              element1 <- str_split(element,"_")[[1]][2]
                                                              
@@ -2662,7 +2665,6 @@ server <- function(input, output, session){
     for (element in hidennodes_builder()) {
       df <- df[!df[,input$id_nodes]==element,]
     }
-    #View(df)
     df
   })
   
@@ -2677,6 +2679,137 @@ server <- function(input, output, session){
   })
   
   ###### Options of the Overlay additional data tab ###### 
+  observeEvent(input$goOverlaid1,{
+    output$ui <- renderUI({
+      if (is.null(input$mapping_question))
+        return()
+      
+      # Depending on input$mapping_question, we'll generate a different
+      # UI component and send it to the client.
+      switch(input$mapping_question,
+             "Yes, a colour gradient." = {
+               box(width = 12, 
+                   colorSelectorInput("range_color1", "Choose the first colour:",
+                                                    choices = c("yellow", 
+                                                                "orange",
+                                                                "red",
+                                                                "magenta",
+                                                                "blue",
+                                                                "cyan",
+                                                                "green")),
+                   bsTooltip("range_color1", "This colour is the minimum."),
+                   colorSelectorInput("range_color2", "Choose the second colour:",
+                                      choices = rev(c("yellow", 
+                                                      "orange",
+                                                      "red",
+                                                      "magenta",
+                                                      "blue",
+                                                      "cyan",
+                                                      "green"))),
+                   bsTooltip("range_color2", "This colour is the maximum."),
+                  sliderInput("range_color_numeric", "Specify the range of values to map:",min = 1, max = 1000,
+                             value = c(200,500)),
+                  bsTooltip("range_color_numeric", "Between the minimum and maximum value of the attribute.")
+                 )},
+             "Yes, a size gradient." = {
+               box(width = 12,
+                 sliderInput("range_size", "Choose the extremes of the gradient:",
+                             min = 10, max = 200, value = c(10,200), step = 5, round = TRUE),
+                 bsTooltip("range_size", "These are the minimum and maximum sizes for the visual style."),
+                 sliderInput("range_size_numeric", "Specify the range of values to map:",min = 1, max = 1000,
+                             value = c(200,500)),
+                 bsTooltip("range_size_numeric", "Between the minimum and maximum value of the attribute.")
+                 )},
+             "No" = {return()}
+      )
+    })
+  })
+  observeEvent(c(input$mapping_question, input$gradient_id), {
+    if(nchar(input$gradient_id)>2){
+      updateSelectInput(session, "attr_color_grad",
+                      choices = c(nodes_attr_reactive()))
+      updateSelectInput(session, "attr_size_grad", #select node by attribute
+                        choices = c(nodes_attr_reactive())) 
+    }
+  })
+  observeEvent(c(input$mapping_question, input$gradient_id), {
+    if(nchar(input$gradient_id)>2){
+      if(identical(modality(),NULL)){
+        df <- new_df()
+        ids = unique(c(df[,input$id_nodes], df[,input$id_edges]))
+        data <- data.frame(id = character(),    # Create empty data frame
+                           gradient_id = numeric(),
+                           stringsAsFactors = FALSE)
+        n=1
+        for(i in ids){
+          list <- df[df[, input$id_nodes] == i,]
+          ii <- list[[input$gradient_id]]
+          data[n,]<-list(i,as.numeric(ii[1]))
+          n <- n+1
+        }
+        updateSliderInput(session,"range_color_numeric",
+                          min = min(data[,2],na.rm = TRUE), max = max(data[,2], na.rm = TRUE),
+                          value = c(min(data[,2],na.rm = TRUE),max(data[,2], na.rm = TRUE))
+                          ) 
+      }else{
+        df <- as.data.frame(results_reactive_builder())
+        ids = unique(c(df[,input$id_nodes], df[,input$id_edges]))
+        data <- data.frame(id = character(),    # Create empty data frame
+                           gradient_id = numeric(),
+                           stringsAsFactors = FALSE)
+        n=1
+        for(i in ids){
+          list <- df[df[, input$id_nodes] == i,]
+          ii <- list[[input$gradient_id]]
+          data[n,]<-list(i,as.numeric(ii[1]))
+          n <- n+1
+        }
+        updateSliderInput(session,"range_color_numeric",
+                          min = min(data[,2],na.rm = TRUE), max = max(data[,2], na.rm = TRUE) ,
+                          value = c(min(data[,2],na.rm = TRUE),max(data[,2], na.rm = TRUE))
+        )
+      }
+    }
+  })
+  observeEvent(c(input$mapping_question, input$gradient_id), {
+    if(nchar(input$gradient_id)>2){
+      if(identical(modality(),NULL)){
+        df <- new_df()
+        ids = unique(c(df[,input$id_nodes], df[,input$id_edges]))
+        data <- data.frame(id = character(),    # Create empty data frame
+                           gradient_id = numeric(),
+                           stringsAsFactors = FALSE)
+        n=1
+        for(i in ids){
+          list <- df[df[, input$id_nodes] == i,]
+          ii <- list[[input$gradient_id]]
+          data[n,]<-list(i,as.numeric(ii[1]))
+          n <- n+1
+        }
+        updateSliderInput(session,"range_size_numeric",
+                          min = min(data[,2], na.rm = TRUE), max = max(data[,2], na.rm = TRUE),
+                          value = c(min(data[,2],na.rm = TRUE),max(data[,2], na.rm = TRUE))
+                          )
+      }else{
+        df <- as.data.frame(results_reactive_builder())
+        ids = unique(c(df[,input$id_nodes], df[,input$id_edges]))
+        data <- data.frame(id = character(),    # Create empty data frame
+                           gradient_id = numeric(),
+                           stringsAsFactors = FALSE)
+        n=1
+        for(i in ids){
+          list <- df[df[, input$id_nodes] == i,]
+          ii <- list[[input$gradient_id]]
+          data[n,]<-list(i,as.numeric(ii[1]))
+          n <- n+1
+        }
+        updateSliderInput(session,"range_size_numeric",
+                          min = min(data[,2],na.rm = TRUE), max = max(data[,2], na.rm = TRUE) ,
+                          value = c(min(data[,2],na.rm = TRUE),max(data[,2], na.rm = TRUE))
+                          )
+      }
+    }
+  })
   observeEvent(input$goOverlaid1, {
     if(identical(modality(),NULL)){
       updateSelectInput(session, "selectName_3", #select node by attribute
@@ -2804,22 +2937,13 @@ server <- function(input, output, session){
     if(identical(modality(),NULL)){
       #cytoscape network chart
       #nodes and edges data frames are the arguments of the function
-      plotInput <- cytoscape(nodes = style_custom_nodes_reactive(), edges = style_edges_reactive()) %>%
-        #gradient color is not working
-        #node_style(
-        #  'background-fill' = 'radial-gradient',
-        #  'background-gradient-stop-colors' = 'data(colors)', 
-        #  'background-gradient-stop-positions' = '25 75 80') %>%
+      plotInput <- cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>%
         layout('breadthfirst', directed = TRUE) %>%
         panzoom()
       saveWidget(plotInput, "temp.html", selfcontained = FALSE)
       output$network <- renderCytoscape({
         # draw the network
-        cytoscape(nodes = style_custom_nodes_reactive(), edges = style_edges_reactive()) %>%
-          #node_style(
-          #  'background-fill' = 'radial-gradient',
-          #  'background-gradient-stop-colors' = 'data(colors)', 
-          #  'background-gradient-stop-positions' = '25 75 80') %>%
+        cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>%
           layout('breadthfirst', directed = TRUE) %>%
           panzoom()
         
@@ -2849,12 +2973,16 @@ server <- function(input, output, session){
       #select nodes by ID
       updateSelectInput(session, "selectid",
                         choices = c("",options))
+      updateSelectInput(session,"gradient_id",
+                        choices = c("",c(nodes_attr_reactive())))
     }else{
       df <- new_df_builder()
       options <- unique(c(df[,input$id_nodes], df[,input$id_edges]))
       #select nodes by ID
       updateSelectInput(session, "selectid",
                         choices = c("",options))
+      updateSelectInput(session,"gradient_id",
+                        choices = c("",c(nodes_attr_reactive())))
     }
     
   })
@@ -2887,7 +3015,7 @@ server <- function(input, output, session){
                    "round-tag",
                    "vee")
     }else if(input$select_parameter=="size"){
-      options <- c("10px","20px","50px","70px","90px","100px","150px") #size in pixels (unit)
+      options <- c("10","20","50","70","90","100","150") #size in pixels (unit)
     }else{
       options <- c("Orange"="#ff8c1a", #the option visible for the user to select is the name and the code is the argument
                    "Blue"="#99ccff",
@@ -2982,115 +3110,361 @@ server <- function(input, output, session){
       })
       #code to call cytoscape function and update the network
       if(is.null(values$dfWorking)){ #if there are no overlays
-        strategy <- input$layoutcytoscape
-        printf("about to sendCustomMessage, layout: %s", strategy)
-        
-        if(strategy=="cola"){
-          plotInput <- cytoscape(nodes = style_custom_nodes_reactive(), edges = style_edges_reactive()) %>% 
-            cola_layout(avoidOverlap = TRUE) %>%
-            panzoom()
-          saveWidget(plotInput, "temp.html", selfcontained = FALSE)
-          output$network <- renderCytoscape({
-            #workflow_zip2(new_df(),values$dfWorking)
-            cytoscape(nodes = style_custom_nodes_reactive(), edges = style_edges_reactive()) %>% 
-              cola_layout(avoidOverlap = TRUE) %>%
-              panzoom()
-          })
-        }else{ 
-          plotInput <- cytoscape(nodes = style_custom_nodes_reactive(), edges = style_edges_reactive()) %>% 
-            layout(strategy, avoidOverlap = TRUE) %>%
-            panzoom()
-          saveWidget(plotInput, "temp.html", selfcontained = FALSE)
-          output$network <- renderCytoscape({
-            #workflow_zip2(new_df(),values$dfWorking)
-            cytoscape(nodes = style_custom_nodes_reactive(), edges = style_edges_reactive()) %>% 
-              layout(strategy, avoidOverlap = TRUE) %>%
-              panzoom()
-          })
-        }
-      }else{ #with overlays
-        strategy <- input$layoutcytoscape
-        if(strategy == "cola"){
-          #workflow_zip2(new_df(),values$dfWorking)
-          plotInput <- cytoscape(nodes = style_custom_nodes_reactive(), edges = style_edges_reactive()) %>% 
-            #the first argument, previous = sign, of node_style is a recognised cytoscape node style name
-            #the second argument is the label given in the dataframe
-            node_style('background-color' = 'data(node_color)') %>% 
-            node_style('shape' = 'data(node_shape)') %>%
-            node_style('width' = 'data(node_width)') %>% #size defines width and heigth
-            node_style('height' = 'data(node_height)') %>%
-            #the following lines try to implement the color gradient
-            #node_style(
-            #  'background-fill' = 'radial-gradient',
-            #  'background-gradient-stop-colors' = 'data(colors)', 
-            #  'background-gradient-stop-positions' = '25 75 80') %>%
-            #node_style("background-fill" = "radial-gradient") %>%
-            #node_style("background-gradient-stop-colors" = "data(colors)") %>%
-            #node_style("background-gradient-stop-positions" = "25 400 8000") %>%
-            cola_layout(avoidOverlap = TRUE) %>%
-            panzoom()
-        }else{
-          #workflow_zip2(new_df(),values$dfWorking)
-          plotInput <- cytoscape(nodes = style_custom_nodes_reactive(), edges = style_edges_reactive()) %>% 
-            node_style('background-color' = 'data(node_color)') %>%
-            node_style('shape' = 'data(node_shape)') %>%
-            node_style('width' = 'data(node_width)') %>%
-            node_style('height' = 'data(node_height)') %>%
-            #node_style(
-            #  'background-fill' = 'radial-gradient',
-            #  'background-gradient-stop-colors' = 'data(colors)', 
-            #  'background-gradient-stop-positions' = '25 75 80') %>%
-            
-            #node_style('background-fill' = 'radial-gradient') %>%
-            #node_style('background-gradient-stop-colors' = 'data(colors)') %>%
-            #node_style('background-gradient-stop-positions' = '25 75 80') %>%
-            layout(strategy, avoidOverlap = TRUE) %>%
-            panzoom()
-        }
-        saveWidget(plotInput, "temp.html", selfcontained = FALSE)
-        output$network <- renderCytoscape({
+        if(input$mapping_question == "No"  | nchar(input$gradient_id)<2){
           strategy <- input$layoutcytoscape
           printf("about to sendCustomMessage, layout: %s", strategy)
+          
+          if(strategy=="cola"){
+            plotInput <- cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+              cola_layout(avoidOverlap = TRUE) %>%
+              panzoom()
+            saveWidget(plotInput, "temp.html", selfcontained = FALSE)
+            output$network <- renderCytoscape({
+              #workflow_zip2(new_df(),values$dfWorking)
+              cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                cola_layout(avoidOverlap = TRUE) %>%
+                panzoom()
+            })
+          }else{ 
+            plotInput <- cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+              layout(strategy, avoidOverlap = TRUE) %>%
+              panzoom()
+            saveWidget(plotInput, "temp.html", selfcontained = FALSE)
+            output$network <- renderCytoscape({
+              #workflow_zip2(new_df(),values$dfWorking)
+              cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                layout(strategy, avoidOverlap = TRUE) %>%
+                panzoom()
+            })
+          }
+        }else{
+          if(input$mapping_question == "Yes, a colour gradient."){
+            if(strategy == "cola"){
+              #workflow_zip2(new_df(),values$dfWorking)
+              plotInput <- cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                #the first argument, previous = sign, of node_style is a recognised cytoscape node style name
+                #the second argument is the label given in the dataframe
+                node_style('background-color' = paste0('mapData(gradient,',
+                                                       as.character(input$range_color_numeric[1]),', ',
+                                                       as.character(input$range_color_numeric[2]),', ',
+                                                       input$range_color1,', ',
+                                                       input$range_color2,')')) %>% 
+                
+                cola_layout(avoidOverlap = TRUE) %>%
+                panzoom()
+            }else{
+              #workflow_zip2(new_df(),values$dfWorking)
+              plotInput <- cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                node_style('background-color' = paste0('mapData(gradient,',
+                                                       as.character(input$range_color_numeric[1]),',',
+                                                       as.character(input$range_color_numeric[2]),',',
+                                                       input$range_color1,',',
+                                                       input$range_color2,')')) %>% 
+                
+                layout(strategy, avoidOverlap = TRUE) %>%
+                panzoom()
+            }
+            saveWidget(plotInput, "temp.html", selfcontained = FALSE)
+            output$network <- renderCytoscape({
+              strategy <- input$layoutcytoscape
+              printf("about to sendCustomMessage, layout: %s", strategy)
+              if(strategy == "cola"){
+                #workflow_zip2(new_df(),values$dfWorking)
+                cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                  node_style('background-color' = paste0('mapData(gradient,',
+                                                         as.character(input$range_color_numeric[1]),',',
+                                                         as.character(input$range_color_numeric[2]),',',
+                                                         input$range_color1,',',
+                                                         input$range_color2,')')) %>% 
+                  
+                  cola_layout(avoidOverlap = TRUE) %>%
+                  panzoom()
+              }else{
+                #workflow_zip2(new_df(),values$dfWorking)
+                cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                  node_style('background-color' = paste0('mapData(gradient,',
+                                                         as.character(input$range_color_numeric[1]),',',
+                                                         as.character(input$range_color_numeric[2]),',',
+                                                         input$range_color1,',',
+                                                         input$range_color2,')')) %>% 
+                  
+                  layout(strategy, avoidOverlap = TRUE) %>%
+                  panzoom()
+              }
+            })
+          }else{
+            if(strategy == "cola"){
+              #workflow_zip2(new_df(),values$dfWorking)
+              plotInput <- cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                #the first argument, previous = sign, of node_style is a recognised cytoscape node style name
+                #the second argument is the label given in the dataframe
+                
+                node_style('width' = paste0('mapData(gradient,',
+                                            as.character(input$range_size_numeric[1]),',',
+                                            as.character(input$range_size_numeric[2]),',',
+                                            input$range_size[1],',',
+                                            input$range_size[2],')')) %>%
+                node_style('height' = paste0('mapData(gradient,',
+                                             as.character(input$range_size_numeric[1]),',',
+                                             as.character(input$range_size_numeric[2]),',',
+                                             input$range_size[1],',',
+                                             input$range_size[2],')')) %>%
+       
+                cola_layout(avoidOverlap = TRUE) %>%
+                panzoom()
+            }else{
+              #workflow_zip2(new_df(),values$dfWorking)
+              plotInput <- cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                
+                node_style('width' = paste0('mapData(gradient,',
+                                            as.character(input$range_size_numeric[1]),',',
+                                            as.character(input$range_size_numeric[2]),',',
+                                            input$range_size[1],',',
+                                            input$range_size[2],')')) %>%
+                node_style('height' = paste0('mapData(gradient,',
+                                             as.character(input$range_size_numeric[1]),',',
+                                             as.character(input$range_size_numeric[2]),',',
+                                             input$range_size[1],',',
+                                             input$range_size[2],')')) %>%
+                
+                layout(strategy, avoidOverlap = TRUE) %>%
+                panzoom()
+            }
+            saveWidget(plotInput, "temp.html", selfcontained = FALSE)
+            output$network <- renderCytoscape({
+              strategy <- input$layoutcytoscape
+              printf("about to sendCustomMessage, layout: %s", strategy)
+              if(strategy == "cola"){
+                #workflow_zip2(new_df(),values$dfWorking)
+                cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+              
+                  node_style('width' = paste0('mapData(gradient,',
+                                              as.character(input$range_size_numeric[1]),',',
+                                              as.character(input$range_size_numeric[2]),',',
+                                              input$range_size[1],',',
+                                              input$range_size[2],')')) %>%
+                  node_style('height' = paste0('mapData(gradient,',
+                                               as.character(input$range_size_numeric[1]),',',
+                                               as.character(input$range_size_numeric[2]),',',
+                                               input$range_size[1],',',
+                                               input$range_size[2],')')) %>%
+                 
+                  cola_layout(avoidOverlap = TRUE) %>%
+                  panzoom()
+              }else{
+                #workflow_zip2(new_df(),values$dfWorking)
+                cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                  
+                  node_style('width' = paste0('mapData(gradient,',
+                                              as.character(input$range_size_numeric[1]),',',
+                                              as.character(input$range_size_numeric[2]),',',
+                                              input$range_size[1],',',
+                                              input$range_size[2],')')) %>%
+                  node_style('height' = paste0('mapData(gradient,',
+                                               as.character(input$range_size_numeric[1]),',',
+                                               as.character(input$range_size_numeric[2]),',',
+                                               input$range_size[1],',',
+                                               input$range_size[2],')')) %>%
+                 
+                  layout(strategy, avoidOverlap = TRUE) %>%
+                  panzoom()
+              }
+            })
+          }
+        }
+        
+      }else{ #with overlays
+        strategy <- input$layoutcytoscape
+        if(input$mapping_question == "No"| nchar(input$gradient_id)<2){
           if(strategy == "cola"){
             #workflow_zip2(new_df(),values$dfWorking)
-            cytoscape(nodes = style_custom_nodes_reactive(), edges = style_edges_reactive()) %>% 
-              node_style('background-color' = 'data(node_color)') %>%
+            plotInput <- cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+              #the first argument, previous = sign, of node_style is a recognised cytoscape node style name
+              #the second argument is the label given in the dataframe
+              node_style('background-color' = 'data(node_color)') %>% 
               node_style('shape' = 'data(node_shape)') %>%
-              node_style('width' = 'data(node_width)') %>%
+              node_style('width' = 'data(node_width)') %>% #size defines width and heigth
               node_style('height' = 'data(node_height)') %>%
-              #node_style(
-              #  'background-fill' = 'radial-gradient',
-              #  'background-gradient-stop-colors' = 'data(colors)', 
-              #  'background-gradient-stop-positions' = '25 75 80') %>%
-              #node_style("background-fill" = "radial-gradient") %>%
-              #node_style("background-gradient-stop-colors" = "data(colors)") %>%
-              #node_style("background-gradient-stop-positions" = "25 400 8000") %>%
               cola_layout(avoidOverlap = TRUE) %>%
               panzoom()
           }else{
             #workflow_zip2(new_df(),values$dfWorking)
-            cytoscape(nodes = style_custom_nodes_reactive(), edges = style_edges_reactive()) %>% 
+            plotInput <- cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
               node_style('background-color' = 'data(node_color)') %>%
               node_style('shape' = 'data(node_shape)') %>%
               node_style('width' = 'data(node_width)') %>%
               node_style('height' = 'data(node_height)') %>%
-              #node_style(
-              #  'background-fill' = 'radial-gradient',
-              #  'background-gradient-stop-colors' = 'data(colors)', 
-              #  'background-gradient-stop-positions' = '25 75 80') %>%
-              
-              #node_style('background-fill' = 'radial-gradient') %>%
-              #node_style('background-gradient-stop-colors' = 'data(colors)') %>%
-              #node_style('background-gradient-stop-positions' = '25 75 80') %>%
               layout(strategy, avoidOverlap = TRUE) %>%
               panzoom()
           }
-        })
-      }
+          saveWidget(plotInput, "temp.html", selfcontained = FALSE)
+          output$network <- renderCytoscape({
+            strategy <- input$layoutcytoscape
+            printf("about to sendCustomMessage, layout: %s", strategy)
+            if(strategy == "cola"){
+              #workflow_zip2(new_df(),values$dfWorking)
+              cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                node_style('background-color' = 'data(node_color)') %>%
+                node_style('shape' = 'data(node_shape)') %>%
+                node_style('width' = 'data(node_width)') %>%
+                node_style('height' = 'data(node_height)') %>%
+                cola_layout(avoidOverlap = TRUE) %>%
+                panzoom()
+            }else{
+              #workflow_zip2(new_df(),values$dfWorking)
+              cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                node_style('background-color' = 'data(node_color)') %>%
+                node_style('shape' = 'data(node_shape)') %>%
+                node_style('width' = 'data(node_width)') %>%
+                node_style('height' = 'data(node_height)') %>%
+                layout(strategy, avoidOverlap = TRUE) %>%
+                panzoom()
+            }
+          })
+          
+        }else{
+          if(input$mapping_question == "Yes, a colour gradient."){
+            if(strategy == "cola"){
+              #workflow_zip2(new_df(),values$dfWorking)
+              plotInput <- cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                #the first argument, previous = sign, of node_style is a recognised cytoscape node style name
+                #the second argument is the label given in the dataframe
+                node_style('background-color' = paste0('mapData(gradient,',
+                                                       as.character(input$range_color_numeric[1]),',',
+                                                       as.character(input$range_color_numeric[2]),',',
+                                                       input$range_color1,',',
+                                                       input$range_color2,')')) %>% 
+                node_style('shape' = 'data(node_shape)') %>%
+                node_style('width' = 'data(node_width)') %>%
+                node_style('height' = 'data(node_height)') %>%
+                cola_layout(avoidOverlap = TRUE) %>%
+                panzoom()
+            }else{
+              plotInput <- cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                node_style('background-color' = paste0('mapData(gradient,',
+                                                       as.character(input$range_color_numeric[1]),',',
+                                                       as.character(input$range_color_numeric[2]),',',
+                                                       input$range_color1,',',
+                                                       input$range_color2,')')) %>% 
+                node_style('shape' = 'data(node_shape)') %>%
+                node_style('width' = 'data(node_width)') %>%
+                node_style('height' = 'data(node_height)') %>%
+                layout(strategy, avoidOverlap = TRUE) %>%
+                panzoom()
+            }
+            saveWidget(plotInput, "temp.html", selfcontained = FALSE)
+            output$network <- renderCytoscape({
+              strategy <- input$layoutcytoscape
+              printf("about to sendCustomMessage, layout: %s", strategy)
+              if(strategy == "cola"){
+                cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                  node_style('background-color' = paste0('mapData(gradient,',
+                                                         as.character(input$range_color_numeric[1]),',',
+                                                         as.character(input$range_color_numeric[2]),',',
+                                                         input$range_color1,',',
+                                                         input$range_color2,')')) %>% 
+                  node_style('shape' = 'data(node_shape)') %>%
+                  node_style('width' = 'data(node_width)') %>%
+                  node_style('height' = 'data(node_height)') %>%
+                  cola_layout(avoidOverlap = TRUE) %>%
+                  panzoom()
+              }else{
+                #workflow_zip2(new_df(),values$dfWorking)
+                cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                  node_style('background-color' = paste0('mapData(gradient,',
+                                                         as.character(input$range_color_numeric[1]),',',
+                                                         as.character(input$range_color_numeric[2]),',',
+                                                         input$range_color1,',',
+                                                         input$range_color2,')')) %>% 
+                  node_style('shape' = 'data(node_shape)') %>%
+                  node_style('width' = 'data(node_width)') %>%
+                  node_style('height' = 'data(node_height)') %>%
+                  layout(strategy, avoidOverlap = TRUE) %>%
+                  panzoom()
+              }
+            })
+          }else{
+            if(strategy == "cola"){
+              #workflow_zip2(new_df(),values$dfWorking)
+              plotInput <- cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                #the first argument, previous = sign, of node_style is a recognised cytoscape node style name
+                #the second argument is the label given in the dataframe
+                node_style('background-color' = 'data(node_color)') %>% 
+                node_style('shape' = 'data(node_shape)') %>%
+                node_style('width' = paste0('mapData(gradient,',
+                                            as.character(input$range_size_numeric[1]),',',
+                                            as.character(input$range_size_numeric[2]),',',
+                                            input$range_size[1],',',
+                                            input$range_size[2],')')) %>%
+                node_style('height' = paste0('mapData(gradient,',
+                                             as.character(input$range_size_numeric[1]),',',
+                                             as.character(input$range_size_numeric[2]),',',
+                                             input$range_size[1],',',
+                                             input$range_size[2],')')) %>%
+                cola_layout(avoidOverlap = TRUE) %>%
+                panzoom()
+            }else{
+              plotInput <- cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                node_style('background-color' = 'data(node_color)') %>% 
+                node_style('shape' = 'data(node_shape)') %>%
+                node_style('width' = paste0('mapData(gradient,',
+                                            as.character(input$range_size_numeric[1]),',',
+                                            as.character(input$range_size_numeric[2]),',',
+                                            input$range_size[1],',',
+                                            input$range_size[2],')')) %>%
+                node_style('height' = paste0('mapData(gradient,',
+                                             as.character(input$range_size_numeric[1]),',',
+                                             as.character(input$range_size_numeric[2]),',',
+                                             input$range_size[1],',',
+                                             input$range_size[2],')')) %>%
+                layout(strategy, avoidOverlap = TRUE) %>%
+                panzoom()
+            }
+            saveWidget(plotInput, "temp.html", selfcontained = FALSE)
+            output$network <- renderCytoscape({
+              strategy <- input$layoutcytoscape
+              printf("about to sendCustomMessage, layout: %s", strategy)
+              if(strategy == "cola"){
+                cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                  node_style('background-color' = 'data(node_color)') %>% 
+                  node_style('shape' = 'data(node_shape)') %>%
+                  node_style('width' = paste0('mapData(gradient,',
+                                              as.character(input$range_size_numeric[1]),',',
+                                              as.character(input$range_size_numeric[2]),',',
+                                              input$range_size[1],',',
+                                              input$range_size[2],')')) %>%
+                  node_style('height' = paste0('mapData(gradient,',
+                                               as.character(input$range_size_numeric[1]),',',
+                                               as.character(input$range_size_numeric[2]),',',
+                                               input$range_size[1],',',
+                                               input$range_size[2],')')) %>%
+                  cola_layout(avoidOverlap = TRUE) %>%
+                  panzoom()
+              }else{
+                cytoscape(nodes = style_custom_nodes_reactive_gradient(), edges = style_edges_reactive()) %>% 
+                  node_style('background-color' = 'data(node_color)') %>% 
+                  node_style('shape' = 'data(node_shape)') %>%
+                  node_style('width' = paste0('mapData(gradient,',
+                                              as.character(input$range_size_numeric[1]),',',
+                                              as.character(input$range_size_numeric[2]),',',
+                                              input$range_size[1],',',
+                                              input$range_size[2],')')) %>%
+                  node_style('height' = paste0('mapData(gradient,',
+                                               as.character(input$range_size_numeric[1]),',',
+                                               as.character(input$range_size_numeric[2]),',',
+                                               input$range_size[1],',',
+                                               input$range_size[2],')')) %>%
+                  layout(strategy, avoidOverlap = TRUE) %>%
+                  panzoom()
+              }
+            })
+          }
+        }
+      
       
       node <- NULL
       node_i <- NULL
-    }else{ #exactly the same but with the data from a built query
+    }}else{ #exactly the same but with the data from a built query
       df <- new_df_builder()
       node<-NULL
       node_i<-NULL
@@ -3138,69 +3512,187 @@ server <- function(input, output, session){
         
       })
       
-      if(is.null(values_builder$dfWorking_builder)){
-        strategy <- input$layoutcytoscape
-        printf("about to sendCustomMessage, layout: %s", strategy)
-        plotInput <- cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
-          cola_layout(avoidOverlap = TRUE) %>%
-          panzoom()
-        saveWidget(plotInput, "temp.html", selfcontained = FALSE)
-        if(strategy=="cola"){
-          output$network <- renderCytoscape({
-            #workflow_zip2(new_df(),values$dfWorking)
-            cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
-              cola_layout(avoidOverlap = TRUE) %>%
-              panzoom()
-          })
-        }else{
-          plotInput <- cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
-            layout(strategy, avoidOverlap = TRUE) %>%
-            panzoom()
-          saveWidget(plotInput, "temp.html", selfcontained = FALSE)
-          output$network <- renderCytoscape({
-            #workflow_zip2(new_df(),values$dfWorking)
-            cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
-              layout(strategy, avoidOverlap = TRUE) %>%
-              panzoom()
-          })
-        }
-      }else{
-        strategy <- input$layoutcytoscape
-        if(strategy == "cola"){
-          #workflow_zip2(new_df(),values$dfWorking)
-          plotInput <- cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
-            node_style('background-color' = 'data(node_color)') %>%
-            node_style('shape' = 'data(node_shape)') %>%
-            node_style('width' = 'data(node_width)') %>%
-            node_style('height' = 'data(node_height)') %>%
-            cola_layout(avoidOverlap = TRUE) %>%
-            panzoom()
-        }else{
-          #workflow_zip2(new_df(),values$dfWorking)
-          plotInput <- cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
-            node_style('background-color' = 'data(node_color)') %>%
-            node_style('shape' = 'data(node_shape)') %>%
-            node_style('width' = 'data(node_width)') %>%
-            node_style('height' = 'data(node_height)') %>%
-            layout(strategy, avoidOverlap = TRUE) %>%
-            panzoom()
-        }
-        saveWidget(plotInput, "temp.html", selfcontained = FALSE)
-        output$network <- renderCytoscape({
+      if(is.null(values_builder$dfWorking_builder)){ #if there are no overlays
+        if(input$mapping_question == "No"  | nchar(input$gradient_id)<2){
           strategy <- input$layoutcytoscape
           printf("about to sendCustomMessage, layout: %s", strategy)
+          
+          if(strategy=="cola"){
+            plotInput <- cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+              cola_layout(avoidOverlap = TRUE) %>%
+              panzoom()
+            saveWidget(plotInput, "temp.html", selfcontained = FALSE)
+            output$network <- renderCytoscape({
+              #workflow_zip2(new_df(),values$dfWorking)
+              cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                cola_layout(avoidOverlap = TRUE) %>%
+                panzoom()
+            })
+          }else{ 
+            plotInput <- cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+              layout(strategy, avoidOverlap = TRUE) %>%
+              panzoom()
+            saveWidget(plotInput, "temp.html", selfcontained = FALSE)
+            output$network <- renderCytoscape({
+              #workflow_zip2(new_df(),values$dfWorking)
+              cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                layout(strategy, avoidOverlap = TRUE) %>%
+                panzoom()
+            })
+          }
+        }else{
+          if(input$mapping_question == "Yes, a colour gradient."){
+            if(strategy == "cola"){
+              #workflow_zip2(new_df(),values$dfWorking)
+              plotInput <- cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                #the first argument, previous = sign, of node_style is a recognised cytoscape node style name
+                #the second argument is the label given in the dataframe
+                node_style('background-color' = paste0('mapData(gradient,',
+                                                       as.character(input$range_color_numeric[1]),', ',
+                                                       as.character(input$range_color_numeric[2]),', ',
+                                                       input$range_color1,', ',
+                                                       input$range_color2,')')) %>% 
+                
+                cola_layout(avoidOverlap = TRUE) %>%
+                panzoom()
+            }else{
+              #workflow_zip2(new_df(),values$dfWorking)
+              plotInput <- cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                node_style('background-color' = paste0('mapData(gradient,',
+                                                       as.character(input$range_color_numeric[1]),',',
+                                                       as.character(input$range_color_numeric[2]),',',
+                                                       input$range_color1,',',
+                                                       input$range_color2,')')) %>% 
+                
+                layout(strategy, avoidOverlap = TRUE) %>%
+                panzoom()
+            }
+            saveWidget(plotInput, "temp.html", selfcontained = FALSE)
+            output$network <- renderCytoscape({
+              strategy <- input$layoutcytoscape
+              printf("about to sendCustomMessage, layout: %s", strategy)
+              if(strategy == "cola"){
+                #workflow_zip2(new_df(),values$dfWorking)
+                cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                  node_style('background-color' = paste0('mapData(gradient,',
+                                                         as.character(input$range_color_numeric[1]),',',
+                                                         as.character(input$range_color_numeric[2]),',',
+                                                         input$range_color1,',',
+                                                         input$range_color2,')')) %>% 
+                  
+                  cola_layout(avoidOverlap = TRUE) %>%
+                  panzoom()
+              }else{
+                #workflow_zip2(new_df(),values$dfWorking)
+                cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                  node_style('background-color' = paste0('mapData(gradient,',
+                                                         as.character(input$range_color_numeric[1]),',',
+                                                         as.character(input$range_color_numeric[2]),',',
+                                                         input$range_color1,',',
+                                                         input$range_color2,')')) %>% 
+                  
+                  layout(strategy, avoidOverlap = TRUE) %>%
+                  panzoom()
+              }
+            })
+          }else{
+            if(strategy == "cola"){
+              #workflow_zip2(new_df(),values$dfWorking)
+              plotInput <- cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                #the first argument, previous = sign, of node_style is a recognised cytoscape node style name
+                #the second argument is the label given in the dataframe
+                
+                node_style('width' = paste0('mapData(gradient,',
+                                            as.character(input$range_size_numeric[1]),',',
+                                            as.character(input$range_size_numeric[2]),',',
+                                            input$range_size[1],',',
+                                            input$range_size[2],')')) %>%
+                node_style('height' = paste0('mapData(gradient,',
+                                             as.character(input$range_size_numeric[1]),',',
+                                             as.character(input$range_size_numeric[2]),',',
+                                             input$range_size[1],',',
+                                             input$range_size[2],')')) %>%
+                
+                cola_layout(avoidOverlap = TRUE) %>%
+                panzoom()
+            }else{
+              #workflow_zip2(new_df(),values$dfWorking)
+              plotInput <- cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                
+                node_style('width' = paste0('mapData(gradient,',
+                                            as.character(input$range_size_numeric[1]),',',
+                                            as.character(input$range_size_numeric[2]),',',
+                                            input$range_size[1],',',
+                                            input$range_size[2],')')) %>%
+                node_style('height' = paste0('mapData(gradient,',
+                                             as.character(input$range_size_numeric[1]),',',
+                                             as.character(input$range_size_numeric[2]),',',
+                                             input$range_size[1],',',
+                                             input$range_size[2],')')) %>%
+                
+                layout(strategy, avoidOverlap = TRUE) %>%
+                panzoom()
+            }
+            saveWidget(plotInput, "temp.html", selfcontained = FALSE)
+            output$network <- renderCytoscape({
+              strategy <- input$layoutcytoscape
+              printf("about to sendCustomMessage, layout: %s", strategy)
+              if(strategy == "cola"){
+                #workflow_zip2(new_df(),values$dfWorking)
+                cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                  
+                  node_style('width' = paste0('mapData(gradient,',
+                                              as.character(input$range_size_numeric[1]),',',
+                                              as.character(input$range_size_numeric[2]),',',
+                                              input$range_size[1],',',
+                                              input$range_size[2],')')) %>%
+                  node_style('height' = paste0('mapData(gradient,',
+                                               as.character(input$range_size_numeric[1]),',',
+                                               as.character(input$range_size_numeric[2]),',',
+                                               input$range_size[1],',',
+                                               input$range_size[2],')')) %>%
+                  
+                  cola_layout(avoidOverlap = TRUE) %>%
+                  panzoom()
+              }else{
+                #workflow_zip2(new_df(),values$dfWorking)
+                cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                  
+                  node_style('width' = paste0('mapData(gradient,',
+                                              as.character(input$range_size_numeric[1]),',',
+                                              as.character(input$range_size_numeric[2]),',',
+                                              input$range_size[1],',',
+                                              input$range_size[2],')')) %>%
+                  node_style('height' = paste0('mapData(gradient,',
+                                               as.character(input$range_size_numeric[1]),',',
+                                               as.character(input$range_size_numeric[2]),',',
+                                               input$range_size[1],',',
+                                               input$range_size[2],')')) %>%
+                  
+                  layout(strategy, avoidOverlap = TRUE) %>%
+                  panzoom()
+              }
+            })
+          }
+        }
+        
+      }else{ #with overlays
+        strategy <- input$layoutcytoscape
+        if(input$mapping_question == "No"| nchar(input$gradient_id)<2){
           if(strategy == "cola"){
             #workflow_zip2(new_df(),values$dfWorking)
-            cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
-              node_style('background-color' = 'data(node_color)') %>%
+            plotInput <- cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+              #the first argument, previous = sign, of node_style is a recognised cytoscape node style name
+              #the second argument is the label given in the dataframe
+              node_style('background-color' = 'data(node_color)') %>% 
               node_style('shape' = 'data(node_shape)') %>%
-              node_style('width' = 'data(node_width)') %>%
+              node_style('width' = 'data(node_width)') %>% #size defines width and heigth
               node_style('height' = 'data(node_height)') %>%
               cola_layout(avoidOverlap = TRUE) %>%
               panzoom()
           }else{
             #workflow_zip2(new_df(),values$dfWorking)
-            cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+            plotInput <- cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
               node_style('background-color' = 'data(node_color)') %>%
               node_style('shape' = 'data(node_shape)') %>%
               node_style('width' = 'data(node_width)') %>%
@@ -3208,7 +3700,172 @@ server <- function(input, output, session){
               layout(strategy, avoidOverlap = TRUE) %>%
               panzoom()
           }
-        })
+          saveWidget(plotInput, "temp.html", selfcontained = FALSE)
+          output$network <- renderCytoscape({
+            strategy <- input$layoutcytoscape
+            printf("about to sendCustomMessage, layout: %s", strategy)
+            if(strategy == "cola"){
+              #workflow_zip2(new_df(),values$dfWorking)
+              cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                node_style('background-color' = 'data(node_color)') %>%
+                node_style('shape' = 'data(node_shape)') %>%
+                node_style('width' = 'data(node_width)') %>%
+                node_style('height' = 'data(node_height)') %>%
+                cola_layout(avoidOverlap = TRUE) %>%
+                panzoom()
+            }else{
+              #workflow_zip2(new_df(),values$dfWorking)
+              cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                node_style('background-color' = 'data(node_color)') %>%
+                node_style('shape' = 'data(node_shape)') %>%
+                node_style('width' = 'data(node_width)') %>%
+                node_style('height' = 'data(node_height)') %>%
+                layout(strategy, avoidOverlap = TRUE) %>%
+                panzoom()
+            }
+          })
+          
+        }else{
+          if(input$mapping_question == "Yes, a colour gradient."){
+            if(strategy == "cola"){
+              #workflow_zip2(new_df(),values$dfWorking)
+              plotInput <- cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                #the first argument, previous = sign, of node_style is a recognised cytoscape node style name
+                #the second argument is the label given in the dataframe
+                node_style('background-color' = paste0('mapData(gradient,',
+                                                       as.character(input$range_color_numeric[1]),',',
+                                                       as.character(input$range_color_numeric[2]),',',
+                                                       input$range_color1,',',
+                                                       input$range_color2,')')) %>% 
+                node_style('shape' = 'data(node_shape)') %>%
+                node_style('width' = 'data(node_width)') %>%
+                node_style('height' = 'data(node_height)') %>%
+                cola_layout(avoidOverlap = TRUE) %>%
+                panzoom()
+            }else{
+              plotInput <- cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                node_style('background-color' = paste0('mapData(gradient,',
+                                                       as.character(input$range_color_numeric[1]),',',
+                                                       as.character(input$range_color_numeric[2]),',',
+                                                       input$range_color1,',',
+                                                       input$range_color2,')')) %>% 
+                node_style('shape' = 'data(node_shape)') %>%
+                node_style('width' = 'data(node_width)') %>%
+                node_style('height' = 'data(node_height)') %>%
+                layout(strategy, avoidOverlap = TRUE) %>%
+                panzoom()
+            }
+            saveWidget(plotInput, "temp.html", selfcontained = FALSE)
+            output$network <- renderCytoscape({
+              strategy <- input$layoutcytoscape
+              printf("about to sendCustomMessage, layout: %s", strategy)
+              if(strategy == "cola"){
+                cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                  node_style('background-color' = paste0('mapData(gradient,',
+                                                         as.character(input$range_color_numeric[1]),',',
+                                                         as.character(input$range_color_numeric[2]),',',
+                                                         input$range_color1,',',
+                                                         input$range_color2,')')) %>% 
+                  node_style('shape' = 'data(node_shape)') %>%
+                  node_style('width' = 'data(node_width)') %>%
+                  node_style('height' = 'data(node_height)') %>%
+                  cola_layout(avoidOverlap = TRUE) %>%
+                  panzoom()
+              }else{
+                #workflow_zip2(new_df(),values$dfWorking)
+                cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                  node_style('background-color' = paste0('mapData(gradient,',
+                                                         as.character(input$range_color_numeric[1]),',',
+                                                         as.character(input$range_color_numeric[2]),',',
+                                                         input$range_color1,',',
+                                                         input$range_color2,')')) %>% 
+                  node_style('shape' = 'data(node_shape)') %>%
+                  node_style('width' = 'data(node_width)') %>%
+                  node_style('height' = 'data(node_height)') %>%
+                  layout(strategy, avoidOverlap = TRUE) %>%
+                  panzoom()
+              }
+            })
+          }else{
+            if(strategy == "cola"){
+              #workflow_zip2(new_df(),values$dfWorking)
+              plotInput <- cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                #the first argument, previous = sign, of node_style is a recognised cytoscape node style name
+                #the second argument is the label given in the dataframe
+                node_style('background-color' = 'data(node_color)') %>% 
+                node_style('shape' = 'data(node_shape)') %>%
+                node_style('width' = paste0('mapData(gradient,',
+                                            as.character(input$range_size_numeric[1]),',',
+                                            as.character(input$range_size_numeric[2]),',',
+                                            input$range_size[1],',',
+                                            input$range_size[2],')')) %>%
+                node_style('height' = paste0('mapData(gradient,',
+                                             as.character(input$range_size_numeric[1]),',',
+                                             as.character(input$range_size_numeric[2]),',',
+                                             input$range_size[1],',',
+                                             input$range_size[2],')')) %>%
+                cola_layout(avoidOverlap = TRUE) %>%
+                panzoom()
+            }else{
+              plotInput <- cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                node_style('background-color' = 'data(node_color)') %>% 
+                node_style('shape' = 'data(node_shape)') %>%
+                node_style('width' = paste0('mapData(gradient,',
+                                            as.character(input$range_size_numeric[1]),',',
+                                            as.character(input$range_size_numeric[2]),',',
+                                            input$range_size[1],',',
+                                            input$range_size[2],')')) %>%
+                node_style('height' = paste0('mapData(gradient,',
+                                             as.character(input$range_size_numeric[1]),',',
+                                             as.character(input$range_size_numeric[2]),',',
+                                             input$range_size[1],',',
+                                             input$range_size[2],')')) %>%
+                layout(strategy, avoidOverlap = TRUE) %>%
+                panzoom()
+            }
+            saveWidget(plotInput, "temp.html", selfcontained = FALSE)
+            output$network <- renderCytoscape({
+              strategy <- input$layoutcytoscape
+              printf("about to sendCustomMessage, layout: %s", strategy)
+              if(strategy == "cola"){
+                cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                  node_style('background-color' = 'data(node_color)') %>% 
+                  node_style('shape' = 'data(node_shape)') %>%
+                  node_style('width' = paste0('mapData(gradient,',
+                                              as.character(input$range_size_numeric[1]),',',
+                                              as.character(input$range_size_numeric[2]),',',
+                                              input$range_size[1],',',
+                                              input$range_size[2],')')) %>%
+                  node_style('height' = paste0('mapData(gradient,',
+                                               as.character(input$range_size_numeric[1]),',',
+                                               as.character(input$range_size_numeric[2]),',',
+                                               input$range_size[1],',',
+                                               input$range_size[2],')')) %>%
+                  cola_layout(avoidOverlap = TRUE) %>%
+                  panzoom()
+              }else{
+                cytoscape(nodes = style_custom_nodes_reactive_builder(), edges = style_edges_reactive_builder()) %>% 
+                  node_style('background-color' = 'data(node_color)') %>% 
+                  node_style('shape' = 'data(node_shape)') %>%
+                  node_style('width' = paste0('mapData(gradient,',
+                                              as.character(input$range_size_numeric[1]),',',
+                                              as.character(input$range_size_numeric[2]),',',
+                                              input$range_size[1],',',
+                                              input$range_size[2],')')) %>%
+                  node_style('height' = paste0('mapData(gradient,',
+                                               as.character(input$range_size_numeric[1]),',',
+                                               as.character(input$range_size_numeric[2]),',',
+                                               input$range_size[1],',',
+                                               input$range_size[2],')')) %>%
+                  layout(strategy, avoidOverlap = TRUE) %>%
+                  panzoom()
+              }
+            })
+          }
+        }
+        
+        node <- NULL
+        node_i <- NULL
       }
       
       node <- NULL
@@ -3265,7 +3922,7 @@ server <- function(input, output, session){
             utils::write.csv(new_df(), results_table_path, row.names = TRUE)
             write("", customization_table_path)
             utils::write.csv(data.frame(nodes=input$id_nodes, edges=input$id_edges), ids_path)
-            write(dataFramesToJSON(style_edges_reactive(), style_custom_nodes_reactive()),json_path) 
+            write(dataFramesToJSON(style_edges_reactive(), style_custom_nodes_reactive_gradient()),json_path) 
             # Create a zip of the data
             zip::zipr(zipfile = file, files = c(results_table_path,
                                                 customization_table_path, 
@@ -3279,7 +3936,7 @@ server <- function(input, output, session){
             utils::write.csv(new_df(), results_table_path, row.names = TRUE)
             utils::write.csv(values$dfWorking, customization_table_path, row.names = TRUE)
             utils::write.csv(data.frame(nodes=input$id_nodes, edges=input$id_edges), ids_path)
-            write(dataFramesToJSON(style_edges_reactive(), style_custom_nodes_reactive()),json_path) 
+            write(dataFramesToJSON(style_edges_reactive(), style_custom_nodes_reactive_gradient()),json_path) 
             # Create a zip of the data
             zip::zipr(zipfile = file, files = c(results_table_path, customization_table_path, ids_path, json_path))
           }
@@ -3304,7 +3961,7 @@ server <- function(input, output, session){
             utils::write.csv(new_df_builder(), results_table_path, row.names = TRUE)
             write("", customization_table_path)
             utils::write.csv(data.frame(nodes=input$id_nodes, edges=input$id_edges), ids_path)
-            write(dataFramesToJSON(style_edges_reactive(), style_custom_nodes_reactive()),json_path)
+            write(dataFramesToJSON(style_edges_reactive(), style_custom_nodes_reactive_gradient()),json_path)
             # Create a zip of the data
             zip::zipr(zipfile = file, files = c(results_table_path, 
                                                 customization_table_path, 
@@ -3318,7 +3975,7 @@ server <- function(input, output, session){
             utils::write.csv(new_df_builder(), results_table_path, row.names = TRUE)
             utils::write.csv(values_builder$dfWorking_builder, customization_table_path, row.names = TRUE)
             utils::write.csv(data.frame(nodes=input$id_nodes, edges=input$id_edges), ids_path)
-            write(dataFramesToJSON(style_edges_reactive(), style_custom_nodes_reactive()),json_path)
+            write(dataFramesToJSON(style_edges_reactive(), style_custom_nodes_reactive_gradient()),json_path)
             # Create a zip of the data
             zip::zipr(zipfile = file, files = c(results_table_path, customization_table_path, ids_path, json_path))
           }
@@ -3335,8 +3992,8 @@ server <- function(input, output, session){
     if( is.null(custom_df)){
       nodes <- data.frame(id = unique(c(df[,id_nodes], df[,id_edges]))) %>%
         dplyr::mutate(node_color = "#595959") %>% #background color by default
-        dplyr::mutate(node_width = "10px") %>% #size by defaults
-        dplyr::mutate(node_height = "10px") %>%
+        dplyr::mutate(node_width = "10") %>% #size by defaults
+        dplyr::mutate(node_height = "10") %>%
         dplyr::mutate(node_shape = "ellipse") #shape by default
     }else{
       custom_background <- subset(custom_df,Parameter == "background-color", select = c("Nodes","Selection")) #dataframe subset with only background-color
@@ -3354,12 +4011,12 @@ server <- function(input, output, session){
         #mutate adds a new label to the dataframe nodes, node_width
         dplyr::mutate(node_width = ifelse(id %in% c(custom_size$Nodes), #the first argument is the condition
                                           c(custom_size$Selection),
-                                          "10px")) %>%
+                                          "10")) %>%
         # Define node height
         #mutate adds a new label to the dataframe nodes, node_height
         dplyr::mutate(node_height = ifelse(id %in% c(custom_size$Nodes),
                                            c(custom_size$Selection),
-                                           "10px")) %>%
+                                           "10")) %>%
         
         # Define node shapes
         #mutate adds a new label to the dataframe nodes, node_shape
@@ -3369,17 +4026,123 @@ server <- function(input, output, session){
       
     }
   }
+  style_nodes_reactive_mapping <- function(data_frame,data_frame_working, id_nodes, id_edges, attr_size_grad, attr_color_grad){
+    if(input$mapping_question == "No"| nchar(input$gradient_id)<2){
+      df <- data_frame #original
+      custom_df <- data_frame_working #overlays
+      if( is.null(custom_df)){
+        nodes <- data.frame(id = unique(c(df[,id_nodes], df[,id_edges]))) %>%
+          dplyr::mutate(node_color = "#595959") %>% #background color by default
+          dplyr::mutate(node_width = "10") %>% #size by defaults
+          dplyr::mutate(node_height = "10") %>%
+          dplyr::mutate(node_shape = "ellipse") #shape by default
+      }else{
+        custom_background <- subset(custom_df,Parameter == "background-color", select = c("Nodes","Selection")) #dataframe subset with only background-color
+        custom_shape <- subset(custom_df,Parameter == "shape", select = c("Nodes","Selection")) #dataframe subset with only shape
+        custom_size <- subset(custom_df, Parameter == "size", select = c("Nodes","Selection")) #dataframe subset with only size
+        
+        nodes <- data.frame(id = unique(c(df[,id_nodes], df[,id_edges]))) %>%
+          #Define node colours
+          #mutate adds a new label to the dataframe nodes, node_color
+          dplyr::mutate(node_color = ifelse(id %in% c(custom_background$Nodes), #taking the values from the subset dataframe
+                                            c(custom_background$Selection),
+                                            #subset(custom_background,Nodes==id)$Selection,
+                                            "#595959")) %>% #the nodes that are not modified have the background color by default
+          # Define node width
+          #mutate adds a new label to the dataframe nodes, node_width
+          dplyr::mutate(node_width = ifelse(id %in% c(custom_size$Nodes), #the first argument is the condition
+                                            c(custom_size$Selection),
+                                            "10")) %>%
+          # Define node height
+          #mutate adds a new label to the dataframe nodes, node_height
+          dplyr::mutate(node_height = ifelse(id %in% c(custom_size$Nodes),
+                                             c(custom_size$Selection),
+                                             "10")) %>%
+          
+          # Define node shapes
+          #mutate adds a new label to the dataframe nodes, node_shape
+          dplyr::mutate(node_shape = ifelse(id %in% c(custom_shape$Nodes),
+                                            c(custom_shape$Selection),
+                                            "ellipse")) 
+        
+      }
+    }else{
+      df <- data_frame
+      if(input$mapping_question == "Yes, a colour gradient."){
+        ids = unique(c(df[,id_nodes], df[,id_edges]))
+        data <- data.frame(id = character(),    # Create empty data frame
+                           gradient_id = numeric(),
+                           stringsAsFactors = FALSE)
+        n=1
+        for(i in ids){
+          list <- df[df[, id_nodes] == i,]
+          ii <- list[[attr_color_grad]]
+          data[n,]<-list(i,as.numeric(ii[1]))
+          n <- n+1
+        }
+      }else{
+        ids = unique(c(df[,id_nodes], df[,id_edges]))
+        data <- data.frame(id = character(),    # Create empty data frame
+                           gradient_id = numeric(),
+                           stringsAsFactors = FALSE)
+        n=1
+        for(i in ids){
+          list <- df[df[, id_nodes] == i,]
+          ii <- list[[attr_size_grad]]
+          data[n,]<-list(i,as.numeric(ii[1]))
+          n <- n+1
+        }
+      }
+      custom_df <- data_frame_working #overlays
+      if( is.null(custom_df)){
+        nodes <- data.frame(id = unique(c(df[,id_nodes], df[,id_edges])), gradient = data[,2]) %>%
+          dplyr::mutate(node_color = "#595959") %>% #background color by default
+          dplyr::mutate(node_width = "10") %>% #size by defaults
+          dplyr::mutate(node_height = "10") %>%
+          dplyr::mutate(node_shape = "ellipse") #shape by default
+      }else{
+        custom_background <- subset(custom_df,Parameter == "background-color", select = c("Nodes","Selection")) #dataframe subset with only background-color
+        custom_shape <- subset(custom_df,Parameter == "shape", select = c("Nodes","Selection")) #dataframe subset with only shape
+        custom_size <- subset(custom_df, Parameter == "size", select = c("Nodes","Selection")) #dataframe subset with only size
+        
+        nodes <- data.frame(id = unique(c(df[,id_nodes], df[,id_edges])), gradient = data[,2]) %>%
+          #Define node colours
+          #mutate adds a new label to the dataframe nodes, node_color
+          dplyr::mutate(node_color = ifelse(id %in% c(custom_background$Nodes), #taking the values from the subset dataframe
+                                            c(custom_background$Selection),
+                                            "#595959")) %>% #the nodes that are not modified have the background color by default
+          # Define node width
+          #mutate adds a new label to the dataframe nodes, node_width
+          dplyr::mutate(node_width = ifelse(id %in% c(custom_size$Nodes), #the first argument is the condition
+                                            c(custom_size$Selection),
+                                            "10")) %>%
+          # Define node height
+          #mutate adds a new label to the dataframe nodes, node_height
+          dplyr::mutate(node_height = ifelse(id %in% c(custom_size$Nodes),
+                                             c(custom_size$Selection),
+                                             "10")) %>%
+          
+          # Define node shapes
+          #mutate adds a new label to the dataframe nodes, node_shape
+          dplyr::mutate(node_shape = ifelse(id %in% c(custom_shape$Nodes),
+                                            c(custom_shape$Selection),
+                                            "ellipse")) 
+        
+      }
+    }
+  }
   
-  style_custom_nodes_reactive <- eventReactive(c(input$t_choice,input$m.index_t1,input$m.index_t2,
+ 
+  style_custom_nodes_reactive_gradient <- eventReactive(c(input$t_choice,input$m.index_t1,input$m.index_t2,
                                                  input$m.index_t3,input$m.index_t4,
                                                  input$values_t1,input$values_t2,input$values_t3,
                                                  input$values_t4,input$goResults,input$goOverlaid1,input$hideSelection, input$clearSelection, input$showAll, 
                                                  input$goInteraction,input$id_nodes,input$id_edges,input$nodes_attributes,input$button_set,
-                                                 input$edges_attributes, input$deleteRows),{
-                                                   
-                                                   style_nodes_reactive(new_df(),values$dfWorking, input$id_nodes, input$id_edges)
-                                                   
+                                                 input$edges_attributes, input$deleteRows, input$gradient_id),{
+                                                  
+                                                   style_nodes_reactive_mapping(new_df(),values$dfWorking, input$id_nodes, input$id_edges, input$gradient_id, input$gradient_id)
                                                  })
+  
   style_custom_nodes_reactive_builder <- eventReactive(c(input$b_choice,input$b_2_choice,input$b_3_choice,
                                                          input$b_4_choice,input$b_5_choice,
                                                          input$b_select_1,input$b_constraint_1,input$b_order,
@@ -3390,10 +4153,10 @@ server <- function(input, output, session){
                                                          input$operator_2, input$value_2, input$operator_3, input$value_3,
                                                          input$operator_4, input$value_4, input$operator_5, input$value_5,input$deleteRows, input$button_set,
                                                          input$goOverlaid1,input$hideSelection, input$clearSelection, input$showAll,input$goBuilder,
-                                                         input$goInteraction,input$id_nodes,input$id_edges,input$nodes_attributes,input$edges_attributes),{
+                                                         input$goInteraction,input$id_nodes,input$id_edges,input$nodes_attributes,input$edges_attributes, 
+                                                         input$gradient_id),{
                                                            
-                                                           style_nodes_reactive(as.data.frame(results_reactive_builder()), values_builder$dfWorking_builder, input$id_nodes, input$id_edges)
-                                                           
+                                                           style_nodes_reactive_mapping(as.data.frame(results_reactive_builder()), values_builder$dfWorking_builder, input$id_nodes, input$id_edges, input$gradient_id, input$gradient_id)
                                                          })
   
   ###### Unzip and display saved Networks ######
@@ -3486,7 +4249,7 @@ server <- function(input, output, session){
                                                 "Second, define the value for the parameter.",
                                                 "You can either set the node(s) to customize by their ID or by attribute. See next hint.",
                                                 "You can select one of the attributes set in the Run Query Section to filter the customization. You must select the value for the attribute if you have chosen this way.",
-                                                "Do not forget to press this button each time you describe a new feature for the network.",
+                                                "Do not forget to press this button each time you describe a new feature for the network or you have set a colour or size gradient.",
                                                 "Pressing this button you can see the changes you have done and delete some of them."))
                  ))
                }
