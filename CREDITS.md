@@ -17,6 +17,7 @@ This project is made possible by the libraries listed in this document.
 ##### shinyCheckboxTree
 ##### mixOmics
 ##### cytoscape
+##### base64enc
 
 <details>
 <summary>GPL-3</summary>
