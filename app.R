@@ -2607,62 +2607,124 @@ server <- function(input, output, session){
   
   #as it is desired that the nodes hiden in the visualize your results tab kept hiden in the next step
   #reactive expressions are defined
-  hidennodes <- reactiveVal()
-  hidennodes_builder <- reactiveVal()
+  hidennodes <- reactiveVal() #for invert selected and remove selected buttons
+  hidennodes_non_inverted <- reactiveVal() #for remove selected button 
+  hidennodes_builder <- reactiveVal() 
+  hidennodes_builder_non_inverted <- reactiveVal()
   
-  observeEvent(input$selectName,{
+  observeEvent(c(input$clearSelection, input$showAll),{
     if(identical(modality(),NULL)){
-      #the selectName variable is reactive, as its value changes the vector inside hidennodes variable also does it
-      #to keep the hiden nodes this is not enough, it is defined a new dataframe once one of the following buttons is clicked:
-      #hideSelection, clearSelection, showAll, goOverlaid1 (as the final action in the tab)
-      hidennodes(c(hidennodes(),input$selectName))
+      #after a selection, the user can decide to unselect everything and so the hidennodes reactive value is set to null
+      hidennodes(NULL)
+      hidennodes_non_inverted(NULL)
     }else{
-      hidennodes_builder(c(hidennodes_builder(),input$selectName))
+      hidennodes_builder(NULL)
+      hidennodes_builder_non_inverted(NULL)
     }
   })
   
   observeEvent(input$selectName_2_attr,{
+    getSelectedNodes(session) #initialize the function to get the nodes selected for invert selected
+    newNodes <- input$selectedNodes;
     if(identical(modality(),NULL)){
       df <- results_reactive()
       #we also want to consider the nodes hiden by attribute and not by ID, only
       node_i <- df[,input$selectName_2]==input$selectName_2_attr
       node <- df[node_i,input$id_nodes]
       for (element in node){
-        hidennodes(c(hidennodes(),element))
+        hidennodes_non_inverted(c(hidennodes_non_inverted(),element)) #saving the corresponding node to hide
       }
     }else{
       df <- results_reactive_builder()
       node_i <- df[,input$selectName_2]==input$selectName_2_attr
       node <- df[node_i,input$id_nodes]
       for (element in node){
-        hidennodes_builder(c(hidennodes_builder(),element))
+        hidennodes_builder_non_inverted(c(hidennodes_builder_non_inverted(),element))
       }
+    } 
+  })
+  observeEvent(input$selectName,{
+    getSelectedNodes(session)
+    newNodes <- input$selectedNodes;
+    if(identical(modality(),NULL)){
+      #the selectName variable is reactive, as its value changes the vector inside hidennodes variable also does it
+      #to keep the hiden nodes this is not enough, it is defined a new dataframe once one of the following buttons is clicked:
+      #hideSelection, clearSelection, showAll, goOverlaid1 (as the final action in the tab)
+      hidennodes_non_inverted(c(hidennodes_non_inverted(),input$selectName))
+    }else{
+      hidennodes_builder_non_inverted(c(hidennodes_builder_non_inverted(),input$selectName))
+    }
+    
+  })
+  observeEvent(input$invertSelection, {
+    getSelectedNodes(session)
+    newNodes <- input$selectedNodes;
+    nodes <- as.list(newNodes)
+    #the nodes un-selected are saved
+    if(identical(modality(),NULL)){
+      hidennodes(NULL) #reinitialize the render variable
+    }else{
+      hidennodes_builder(NULL) 
+    }
+    
+    if(identical(modality(),NULL)){
+      for (node in nodes){
+        df <- results_reactive()
+        if (node %in% df[,input$id_nodes]){ #nodes or edges separation
+          df <- df[df[,input$id_nodes]==node,] 
+        } else {
+          df <- df[df[,input$id_edges]==node,] 
+        }
+      }
+    } else {
+
+      for (node in nodes){
+        df <- results_reactive_builder()
+        if (node %in% df[,input$id_nodes]){
+          df <- df[df[,input$id_nodes]== node,]
+        } else {
+          df <- df[df[,input$id_edges]== node,]
+        }
+      }
+    }
+    
+    if (identical(modality(), NULL)){
+      hidennodes(c(hidennodes(),df))
+    } else {
+      hidennodes_builder(c(hidennodes_builder(),df))
     }
   })
   
-  observeEvent(c(input$clearSelection, input$showAll),{
-    if(identical(modality(),NULL)){
-      #after a selection, the user can decide to unselect everything and so the hidennodes reactive value is set to null
-      hidennodes(NULL)
-    }else{
-      hidennodes_builder(NULL)
-    }
-  })
   #for the template query pathway
   new_df <- eventReactive(c(input$hideSelection, input$clearSelection, input$showAll, input$goOverlaid1),{
-    #once the user clicks one of the buttons in the event argument, a new data frame is defined
-    df <- results_reactive()
-    for (element in hidennodes()) {
-      df <- df[!df[,input$id_nodes]==element,]
+    if (is.null(hidennodes())){ 
+      if (is.null(hidennodes_non_inverted())){ #showall
+        df <- results_reactive()
+      } else { #select by id or attribute and remove
+        df <- results_reactive()
+        for (element in hidennodes_non_inverted()) {
+          df <- df[!df[,input$id_nodes]==element,]
+        }
+      }
+    } else { #invert selected
+      df <- as.data.frame(hidennodes())
     }
     df
   })
   
   #for the built query pathway
   new_df_builder <- eventReactive(c(input$hideSelection, input$clearSelection, input$showAll, input$goOverlaid1),{
-    df <- results_reactive_builder()
-    for (element in hidennodes_builder()) {
-      df <- df[!df[,input$id_nodes]==element,]
+    if (is.null(hidennodes_builder())){
+      if (is.null(hidennodes_builder_non_inverted())){
+        df <- results_reactive_builder()
+      } else {
+        df <- results_reactive_builder()
+        for (element in hidennodes_builder_non_inverted()) {
+          df <- df[!df[,input$id_nodes]==element,]
+        }
+      }
+    } else {     
+      df <- as.data.frame(hidennodes_builder())
     }
     df
   })
@@ -2909,7 +2971,7 @@ server <- function(input, output, session){
   style_edges_reactive <- eventReactive(c(input$t_choice,input$m.index_t1,input$m.index_t2,
                                           input$m.index_t3,input$m.index_t4,
                                           input$values_t1,input$values_t2,input$values_t3,
-                                          input$values_t4,input$goResults,input$goOverlaid1, input$hideSelection, input$clearSelection, input$showAll, 
+                                          input$values_t4,input$goResults,input$goOverlaid1, input$hideSelection, input$clearSelection, input$invertSelection, input$showAll, 
                                           input$goInteraction,input$id_nodes,input$id_edges,input$nodes_attributes,input$edges_attributes),{
                                             
                                             #applaying the previous function in the template query
@@ -2925,7 +2987,7 @@ server <- function(input, output, session){
                                                   input$operator_0, input$value_0, input$operator_1, input$value_1,
                                                   input$operator_2, input$value_2, input$operator_3, input$value_3,
                                                   input$operator_4, input$value_4, input$operator_5, input$value_5,
-                                                  input$goOverlaid1,input$hideSelection, input$clearSelection, input$showAll,input$goBuilder,
+                                                  input$goOverlaid1,input$hideSelection, input$clearSelection, input$invertSelection, input$showAll,input$goBuilder,
                                                   input$goInteraction,input$id_nodes,input$id_edges,input$nodes_attributes,input$edges_attributes),{
                                                     
                                                     style_edges_reactive_func(new_df_builder(),input$id_nodes,input$id_edges)
@@ -4135,7 +4197,7 @@ server <- function(input, output, session){
   style_custom_nodes_reactive_gradient <- eventReactive(c(input$t_choice,input$m.index_t1,input$m.index_t2,
                                                  input$m.index_t3,input$m.index_t4,
                                                  input$values_t1,input$values_t2,input$values_t3,
-                                                 input$values_t4,input$goResults,input$goOverlaid1,input$hideSelection, input$clearSelection, input$showAll, 
+                                                 input$values_t4,input$goResults,input$goOverlaid1,input$hideSelection, input$invertSelection, input$clearSelection, input$showAll, 
                                                  input$goInteraction,input$id_nodes,input$id_edges,input$nodes_attributes,input$button_set,
                                                  input$edges_attributes, input$deleteRows, input$gradient_id),{
                                                   
@@ -4151,11 +4213,11 @@ server <- function(input, output, session){
                                                          input$operator_0, input$value_0, input$operator_1, input$value_1,
                                                          input$operator_2, input$value_2, input$operator_3, input$value_3,
                                                          input$operator_4, input$value_4, input$operator_5, input$value_5,input$deleteRows, input$button_set,
-                                                         input$goOverlaid1,input$hideSelection, input$clearSelection, input$showAll,input$goBuilder,
+                                                         input$goOverlaid1,input$hideSelection, input$invertSelection, input$clearSelection, input$showAll,input$goBuilder,
                                                          input$goInteraction,input$id_nodes,input$id_edges,input$nodes_attributes,input$edges_attributes, 
                                                          input$gradient_id),{
                                                            
-                                                           style_nodes_reactive_mapping(as.data.frame(results_reactive_builder()), values_builder$dfWorking_builder, input$id_nodes, input$id_edges, input$gradient_id, input$gradient_id)
+                                                           style_nodes_reactive_mapping(new_df_builder(), values_builder$dfWorking_builder, input$id_nodes, input$id_edges, input$gradient_id, input$gradient_id)
                                                          })
   
   ###### Unzip and display saved Networks ######
