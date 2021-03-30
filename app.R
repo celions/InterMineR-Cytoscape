@@ -2608,82 +2608,69 @@ server <- function(input, output, session){
   #as it is desired that the nodes hiden in the visualize your results tab kept hiden in the next step
   #reactive expressions are defined
   hidennodes <- reactiveVal() #for invert selected and remove selected buttons
-  hidennodes_non_inverted <- reactiveVal() #for remove selected button 
   hidennodes_builder <- reactiveVal() 
-  hidennodes_builder_non_inverted <- reactiveVal()
   
   observeEvent(c(input$clearSelection, input$showAll),{
     if(identical(modality(),NULL)){
       #after a selection, the user can decide to unselect everything and so the hidennodes reactive value is set to null
       hidennodes(NULL)
-      hidennodes_non_inverted(NULL)
     }else{
       hidennodes_builder(NULL)
-      hidennodes_builder_non_inverted(NULL)
     }
   })
   
-  observeEvent(input$selectName_2_attr,{
-    getSelectedNodes(session) #initialize the function to get the nodes selected for invert selected
-    newNodes <- input$selectedNodes;
-    if(identical(modality(),NULL)){
-      df <- results_reactive()
-      #we also want to consider the nodes hiden by attribute and not by ID, only
-      node_i <- df[,input$selectName_2]==input$selectName_2_attr
-      node <- df[node_i,input$id_nodes]
-      for (element in node){
-        hidennodes_non_inverted(c(hidennodes_non_inverted(),element)) #saving the corresponding node to hide
-      }
-    }else{
-      df <- results_reactive_builder()
-      node_i <- df[,input$selectName_2]==input$selectName_2_attr
-      node <- df[node_i,input$id_nodes]
-      for (element in node){
-        hidennodes_builder_non_inverted(c(hidennodes_builder_non_inverted(),element))
-      }
-    } 
-  })
-  observeEvent(input$selectName,{
+  observeEvent(input$invertSelection, ignoreInit=TRUE, {
+    output$selectedNodesDisplay <- renderText({" "})
     getSelectedNodes(session)
-    newNodes <- input$selectedNodes;
-    if(identical(modality(),NULL)){
-      #the selectName variable is reactive, as its value changes the vector inside hidennodes variable also does it
-      #to keep the hiden nodes this is not enough, it is defined a new dataframe once one of the following buttons is clicked:
-      #hideSelection, clearSelection, showAll, goOverlaid1 (as the final action in the tab)
-      hidennodes_non_inverted(c(hidennodes_non_inverted(),input$selectName))
-    }else{
-      hidennodes_builder_non_inverted(c(hidennodes_builder_non_inverted(),input$selectName))
-    }
+    #print the ID's of the node selection 
+  })
+  
+  observeEvent(input$selectedNodes, {
     
-  })
-  observeEvent(input$invertSelection, {
-    getSelectedNodes(session)
-    newNodes <- input$selectedNodes;
-    nodes <- as.list(newNodes)
+    #  communicated here via assignement in cyjShiny.js
+    #     Shiny.setInputValue("selectedNodes", value, {priority: "event"});
+   
     #the nodes un-selected are saved
     if(identical(modality(),NULL)){
       hidennodes(NULL) #reinitialize the render variable
     }else{
       hidennodes_builder(NULL) 
     }
-    
     if(identical(modality(),NULL)){
-      for (node in nodes){
-        df <- results_reactive()
-        if (node %in% df[,input$id_nodes]){ #nodes or edges separation
-          df <- df[df[,input$id_nodes]==node,] 
-        } else {
-          df <- df[df[,input$id_edges]==node,] 
+      newNodes <- input$selectedNodes;
+      df_ref <- results_reactive()
+      df <- NULL
+      for (node in newNodes){
+        if (node %in% df_ref[,input$id_nodes]){ #nodes or edges separation
+          df <- rbind(df, df_ref[df_ref[,input$id_nodes]==node,]) 
+          
+        } else if (node %in% df_ref[,input$id_edges]) {
+          df <- rbind(df,df_ref[df_ref[,input$id_edges]==node,]) 
+        }
+      }
+      for (edge in unique(df[,input$id_edges])){
+        if (edge %in% newNodes){
+          df
+        }else{
+          df <- df[!df[,input$id_edges]==edge,]
         }
       }
     } else {
-
-      for (node in nodes){
-        df <- results_reactive_builder()
-        if (node %in% df[,input$id_nodes]){
-          df <- df[df[,input$id_nodes]== node,]
-        } else {
-          df <- df[df[,input$id_edges]== node,]
+      newNodes <- input$selectedNodes;
+      df_ref <- results_reactive_builder()
+      for (node in newNodes){
+        if (node %in% df_ref[,input$id_nodes]){ #nodes or edges separation
+          df <- rbind(df, df_ref[df_ref[,input$id_nodes]==node,]) 
+          
+        } else if (node %in% df_ref[,input$id_edges]) {
+          df <- rbind(df,df_ref[df_ref[,input$id_edges]==node,]) 
+        }
+      }
+      for (edge in df[,input$id_edges]){
+        if (edge %in% newNodes){
+          df
+        }else{
+          df <- df[!df[,input$id_edges]==edge,]
         }
       }
     }
@@ -2694,18 +2681,10 @@ server <- function(input, output, session){
       hidennodes_builder(c(hidennodes_builder(),df))
     }
   })
-  
   #for the template query pathway
   new_df <- eventReactive(c(input$hideSelection, input$clearSelection, input$showAll, input$goOverlaid1),{
     if (is.null(hidennodes())){ 
-      if (is.null(hidennodes_non_inverted())){ #showall
-        df <- results_reactive()
-      } else { #select by id or attribute and remove
-        df <- results_reactive()
-        for (element in hidennodes_non_inverted()) {
-          df <- df[!df[,input$id_nodes]==element,]
-        }
-      }
+      df <- results_reactive()
     } else { #invert selected
       df <- as.data.frame(hidennodes())
     }
@@ -2715,14 +2694,7 @@ server <- function(input, output, session){
   #for the built query pathway
   new_df_builder <- eventReactive(c(input$hideSelection, input$clearSelection, input$showAll, input$goOverlaid1),{
     if (is.null(hidennodes_builder())){
-      if (is.null(hidennodes_builder_non_inverted())){
-        df <- results_reactive_builder()
-      } else {
-        df <- results_reactive_builder()
-        for (element in hidennodes_builder_non_inverted()) {
-          df <- df[!df[,input$id_nodes]==element,]
-        }
-      }
+      df <- results_reactive_builder()
     } else {     
       df <- as.data.frame(hidennodes_builder())
     }
