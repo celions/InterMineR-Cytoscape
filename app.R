@@ -3120,10 +3120,7 @@ server <- function(input, output, session){
       }
       #the following piece of code resets the IDs, the user can create a new overlay
       isolate({ #to read reactive values without establishing a relationship with the caller (non re-execution)
-        options <- nodes(interaction_reactive())
-        for (element in hidennodes()) {
-          options <- options[options != element]
-        }
+        options <- unique(c(df[,input$id_nodes], df[,input$id_edges]))
         updateSelectInput(session, "selectid",
                           choices = c("",options))
       })
@@ -3523,10 +3520,7 @@ server <- function(input, output, session){
       }
       
       isolate({
-        options <- nodes(interaction_reactive_builder())
-        for (element in hidennodes_builder()) {
-          options <- options[options != element]
-        }
+        options <- unique(c(df[,input$id_nodes], df[,input$id_edges]))
         updateSelectInput(session, "selectid",
                           choices = c("",options))
       })
