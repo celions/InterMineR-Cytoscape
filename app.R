@@ -2651,18 +2651,18 @@ server <- function(input, output, session){
         if(is.null(hidennodes_builder())){
           df <- results_reactive_builder()
           for (node in newNodes_hide){
-            if (node %in% df_ref[,input$id_nodes]){ #nodes or edges separation
+            if (node %in% df[,input$id_nodes]){ #nodes or edges separation
               df <- df[!df[,input$id_nodes]==node,]
-            } else if (node %in% df_ref[,input$id_edges]) {
+            } else if (node %in% df[,input$id_edges]) {
               df <- df[!df[,input$id_edges]==node,]
             }
           }
         } else {
           df <- as.data.frame(hidennodes_builder())
           for (node in newNodes_hide){
-            if (node %in% df_ref[,input$id_nodes]){ #nodes or edges separation
+            if (node %in% df[,input$id_nodes]){ #nodes or edges separation
               df <- df[!df[,input$id_nodes]==node,]
-            } else if (node %in% df_ref[,input$id_edges]) {
+            } else if (node %in% df[,input$id_edges]) {
               df <- df[!df[,input$id_edges]==node,]
             }
           }
