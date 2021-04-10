@@ -3903,10 +3903,10 @@ server <- function(input, output, session){
   output$table1 <- renderDataTable({
     if(identical(modality(),NULL)){
       input$button_set
-      values$dfWorking
+      unique(values$dfWorking)
     }else{
       input$button_set
-      values_builder$dfWorking_builder
+      unique(values_builder$dfWorking_builder)
     }
   })
   ###### Saving the results from overlaying ######
