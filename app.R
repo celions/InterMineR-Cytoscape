@@ -2619,68 +2619,67 @@ server <- function(input, output, session){
     }
   })
   
-  observeEvent(input$invertSelection, ignoreInit=TRUE, {
-    output$selectedNodesDisplay <- renderText({" "})
-    getSelectedNodes(session)
-    #print the ID's of the node selection 
+  #to keep the deletes in the next tab
+  observeEvent(input$hideSelection, ignoreInit=TRUE, {
+    getSelectedNodes(session) #when Remove Selected is pressed 
   })
   
   observeEvent(input$selectedNodes, {
+    if(input$hideSelection != 0){ #if Remove Selected has been pressed
+      newNodes_hide <- input$selectedNodes;
+      if(identical(modality(),NULL)){ #templates
+        if(is.null(hidennodes())){ #considering non previous deletes
+          df <- results_reactive()
+          for (node in newNodes_hide){
+            if (node %in% df[,input$id_nodes]){ #nodes or edges separation
+              df <- df[!df[,input$id_nodes]==node,] #keep those nodes non selected 
+            } else if (node %in% df[,input$id_edges]) { #here edges
+              df <- df[!df[,input$id_edges]==node,] 
+            }
+          }
+        } else { #considering previous deletes 
+          df <- as.data.frame(hidennodes())
+          for (node in newNodes_hide){
+            if (node %in% df[,input$id_nodes]){ #nodes or edges separation
+              df <- df[!df[,input$id_nodes]==node,]
+            } else if (node %in% df[,input$id_edges]) {
+              df <- df[!df[,input$id_edges]==node,] 
+            }
+          }
+        }
+      } else { #query builder
+        if(is.null(hidennodes_builder())){
+          df <- results_reactive_builder()
+          for (node in newNodes_hide){
+            if (node %in% df_ref[,input$id_nodes]){ #nodes or edges separation
+              df <- df[!df[,input$id_nodes]==node,]
+            } else if (node %in% df_ref[,input$id_edges]) {
+              df <- df[!df[,input$id_edges]==node,]
+            }
+          }
+        } else {
+          df <- as.data.frame(hidennodes_builder())
+          for (node in newNodes_hide){
+            if (node %in% df_ref[,input$id_nodes]){ #nodes or edges separation
+              df <- df[!df[,input$id_nodes]==node,]
+            } else if (node %in% df_ref[,input$id_edges]) {
+              df <- df[!df[,input$id_edges]==node,]
+            }
+          }
+        }
+      }
+      if (identical(modality(), NULL)){
+        hidennodes(df) #defining and saving the new data frame in a reactive value
+      } else {
+        hidennodes_builder(df)
+      }
+      updateActionButton(session, "hideSelection", "Remove Selected") #update the action button 
     
-    #  communicated here via assignement in cyjShiny.js
-    #     Shiny.setInputValue("selectedNodes", value, {priority: "event"});
-   
-    #the nodes un-selected are saved
-    if(identical(modality(),NULL)){
-      hidennodes(NULL) #reinitialize the render variable
-    }else{
-      hidennodes_builder(NULL) 
-    }
-    if(identical(modality(),NULL)){
-      newNodes <- input$selectedNodes;
-      df_ref <- results_reactive()
-      df <- NULL
-      for (node in newNodes){
-        if (node %in% df_ref[,input$id_nodes]){ #nodes or edges separation
-          df <- rbind(df, df_ref[df_ref[,input$id_nodes]==node,]) 
-          
-        } else if (node %in% df_ref[,input$id_edges]) {
-          df <- rbind(df,df_ref[df_ref[,input$id_edges]==node,]) 
-        }
-      }
-      for (edge in unique(df[,input$id_edges])){
-        if (edge %in% newNodes){
-          df
-        }else{
-          df <- df[!df[,input$id_edges]==edge,]
-        }
-      }
     } else {
-      newNodes <- input$selectedNodes;
-      df_ref <- results_reactive_builder()
-      for (node in newNodes){
-        if (node %in% df_ref[,input$id_nodes]){ #nodes or edges separation
-          df <- rbind(df, df_ref[df_ref[,input$id_nodes]==node,]) 
-          
-        } else if (node %in% df_ref[,input$id_edges]) {
-          df <- rbind(df,df_ref[df_ref[,input$id_edges]==node,]) 
-        }
-      }
-      for (edge in df[,input$id_edges]){
-        if (edge %in% newNodes){
-          df
-        }else{
-          df <- df[!df[,input$id_edges]==edge,]
-        }
-      }
-    }
-    
-    if (identical(modality(), NULL)){
-      hidennodes(c(hidennodes(),df))
-    } else {
-      hidennodes_builder(c(hidennodes_builder(),df))
+      return()
     }
   })
+  
   #for the template query pathway
   new_df <- eventReactive(c(input$hideSelection, input$clearSelection, input$showAll, input$goOverlaid1),{
     if (is.null(hidennodes())){ 
