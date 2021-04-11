@@ -3000,23 +3000,30 @@ server <- function(input, output, session){
   ###### Overlaying options ######
   observeEvent(c(input$hideSelection, input$clearSelection, input$showAll, input$goOverlaid1),{
     if(identical(modality(),NULL)){
-      df <- new_df()
-      options <- unique(c(df[,input$id_nodes], df[,input$id_edges]))
-      #select nodes by ID
-      updateSelectInput(session, "selectid",
-                        choices = c("",options))
-      updateSelectInput(session,"gradient_id",
-                        choices = c("",c(nodes_attr_reactive())))
+      if(is.null(new_df())){
+        return()
+      } else {
+        df <- new_df()
+        options <- unique(c(df[,input$id_nodes], df[,input$id_edges]))
+        #select nodes by ID
+        updateSelectInput(session, "selectid",
+                          choices = c("",options))
+        updateSelectInput(session,"gradient_id",
+                          choices = c("",c(nodes_attr_reactive())))
+      }
     }else{
-      df <- new_df_builder()
-      options <- unique(c(df[,input$id_nodes], df[,input$id_edges]))
-      #select nodes by ID
-      updateSelectInput(session, "selectid",
-                        choices = c("",options))
-      updateSelectInput(session,"gradient_id",
-                        choices = c("",c(nodes_attr_reactive())))
+      if(is.null(new_df_builder())){
+        return()
+      } else {
+        df <- new_df_builder()
+        options <- unique(c(df[,input$id_nodes], df[,input$id_edges]))
+        #select nodes by ID
+        updateSelectInput(session, "selectid",
+                          choices = c("",options))
+        updateSelectInput(session,"gradient_id",
+                          choices = c("",c(nodes_attr_reactive())))
+      }
     }
-    
   })
   
   observeEvent(input$select_parameter,{
