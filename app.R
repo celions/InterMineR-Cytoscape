@@ -174,7 +174,7 @@ ui <- dashboardPage(
               selectInput( #unlike the previous line, the values for the input control can be defined here and will not change
                 inputId = "operator_0",
                 label = "Constraint operator:",
-                choices = c("=", "!=", "LOOKUP", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE"),
+                choices = c("=", "!=", "LOOKUP", "CONTAINS", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE", "NOT LIKE"),
                 multiple = TRUE
               ),
               textInput( #the user writes the input 
@@ -196,7 +196,7 @@ ui <- dashboardPage(
                 selectInput(
                   inputId = "operator_1",
                   label = "Operator",
-                  choices = c("=", "!=", "LOOKUP", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE"),
+                  choices = c("=", "!=", "LOOKUP", "CONTAINS", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE", "NOT LIKE"),
                   multiple = TRUE
                 ),
                 textInput(
@@ -600,7 +600,7 @@ server <- function(input, output, session){
         selectInput(
           inputId = "operator_2",
           label = "Operator",
-          choices = c("=", "!=", "LOOKUP", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE"), #operator to filter/contrain
+          choices = c("=", "!=", "LOOKUP", "CONTAINS", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE", "NOT LIKE"), #operator to filter/contrain
           multiple = TRUE #this argument is set to TRUE because multiple constraints can be created
         ),
         bsTooltip("operator_2", "Select the operators in the same order as the data is displayed in the above tree.", placement = "top"),
@@ -631,7 +631,7 @@ server <- function(input, output, session){
         selectInput(
           inputId = "operator_3",
           label = "Operator",
-          choices = c("=", "!=", "LOOKUP", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE"),
+          choices = c("=", "!=", "LOOKUP", "CONTAINS", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE", "NOT LIKE"),
           multiple = TRUE
         ),
         textInput(
@@ -657,7 +657,7 @@ server <- function(input, output, session){
         selectInput(
           inputId = "operator_4",
           label = "Operator",
-          choices = c("=", "!=", "LOOKUP", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE"),
+          choices = c("=", "!=", "LOOKUP", "CONTAINS", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE", "NOT LIKE"),
           multiple = TRUE
         ),
         textInput(
@@ -684,7 +684,7 @@ server <- function(input, output, session){
         selectInput(
           inputId = "operator_5",
           label = "Operator",
-          choices = c("=", "!=", "LOOKUP", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE"),
+          choices = c("=", "!=", "LOOKUP", "CONTAINS", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE", "NOT LIKE"),
           multiple = TRUE
         ),
         textInput(
@@ -881,7 +881,7 @@ server <- function(input, output, session){
         selectInput(
           inputId = "operator_1",
           label = "Operator",
-          choices = c("=", "!=", "LOOKUP", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE"),
+          choices = c("=", "!=", "LOOKUP", "CONTAINS", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE", "NOT LIKE"),
           multiple = TRUE
         ),
         textInput(
@@ -894,7 +894,7 @@ server <- function(input, output, session){
         selectInput(
           inputId = "operator_2",
           label = "Operator",
-          choices = c("=", "!=", "LOOKUP", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE"),
+          choices = c("=", "!=", "LOOKUP", "CONTAINS", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE", "NOT LIKE"),
           multiple = TRUE
         ),
         textInput(
@@ -907,7 +907,7 @@ server <- function(input, output, session){
         selectInput(
           inputId = "operator_3",
           label = "Operator",
-          choices = c("=", "!=", "LOOKUP", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE"),
+          choices = c("=", "!=", "LOOKUP", "CONTAINS", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE", "NOT LIKE"),
           multiple = TRUE
         ),
         textInput(
@@ -920,7 +920,7 @@ server <- function(input, output, session){
         selectInput(
           inputId = "operator_4",
           label = "Operator",
-          choices = c("=", "!=", "LOOKUP", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE"),
+          choices = c("=", "!=", "LOOKUP", "CONTAINS", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE", "NOT LIKE"),
           multiple = TRUE
         ),
         textInput(
@@ -933,7 +933,7 @@ server <- function(input, output, session){
         selectInput(
           inputId = "operator_5",
           label = "Operator",
-          choices = c("=", "!=", "LOOKUP", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE"),
+          choices = c("=", "!=", "LOOKUP", "CONTAINS", "ONE OF", "NONE OF", ">", "<", ">=", "<=", "LIKE", "NOT LIKE"),
           multiple = TRUE
         ),
         textInput(
