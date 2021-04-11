@@ -3987,7 +3987,7 @@ server <- function(input, output, session){
             utils::write.csv(new_df_builder(), results_table_path, row.names = TRUE)
             write("", customization_table_path)
             utils::write.csv(data.frame(nodes=input$id_nodes, edges=input$id_edges), ids_path)
-            write(dataFramesToJSON(style_edges_reactive(), style_custom_nodes_reactive_gradient()),json_path)
+            write(dataFramesToJSON(style_edges_reactive_builder(), style_custom_nodes_reactive_builder()),json_path)
             # Create a zip of the data
             zip::zipr(zipfile = file, files = c(results_table_path, 
                                                 customization_table_path, 
@@ -4001,7 +4001,7 @@ server <- function(input, output, session){
             utils::write.csv(new_df_builder(), results_table_path, row.names = TRUE)
             utils::write.csv(values_builder$dfWorking_builder, customization_table_path, row.names = TRUE)
             utils::write.csv(data.frame(nodes=input$id_nodes, edges=input$id_edges), ids_path)
-            write(dataFramesToJSON(style_edges_reactive(), style_custom_nodes_reactive_gradient()),json_path)
+            write(dataFramesToJSON(style_edges_reactive_builder(), style_custom_nodes_reactive_builder()),json_path)
             # Create a zip of the data
             zip::zipr(zipfile = file, files = c(results_table_path, customization_table_path, ids_path, json_path))
           }
